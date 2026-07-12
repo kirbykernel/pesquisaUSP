@@ -604,7 +604,7 @@ export default function ParticipantApp() {
               Recomendamos que você complete a atividade e envie a resposta antes de sair.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
+          <AlertDialogFooter className="flex-col sm:flex-col">
             <AlertDialogCancel onClick={() => setShowLogoutDialog(false)} className="w-full">
               Continuar escutando
             </AlertDialogCancel>
