@@ -4,6 +4,11 @@ import * as db from "../db";
 
 const router = express.Router();
 
+// Data de calendário no fuso dos participantes (mesma regra de server/routers.ts)
+function getDateInSaoPaulo(date: Date): string {
+  return date.toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+}
+
 type SavVariable = {
   name: string;
   type: number;
@@ -83,7 +88,7 @@ router.get("/export/spss", async (req, res) => {
         participant_number: participant?.participantNumber ?? "",
         group: participant?.group === "intervention" ? 1 : 2,
         start_date: participant?.startDate
-          ? new Date(participant.startDate).toISOString().split("T")[0]
+          ? getDateInSaoPaulo(new Date(participant.startDate))
           : "",
         day_number: r.dayNumber,
         wb_antes: r.wellbeingBefore ?? null,
@@ -93,13 +98,13 @@ router.get("/export/spss", async (req, res) => {
           : null,
         current_activity: r.currentActivity ?? "",
         response_date: r.responseDate
-          ? new Date(r.responseDate).toISOString().split("T")[0]
+          ? getDateInSaoPaulo(new Date(r.responseDate))
           : "",
         audio_number: audio?.audioNumber ?? null,
         audio_pct_listened: audio?.percentageListened ?? null,
         audio_completed: audio != null ? (audio.completed ? 1 : 0) : null,
         audio_access_date: audio?.accessDate
-          ? new Date(audio.accessDate).toISOString().split("T")[0]
+          ? getDateInSaoPaulo(new Date(audio.accessDate))
           : "",
       };
     });
@@ -232,7 +237,7 @@ router.get("/export/spss", async (req, res) => {
     const arrayBuffer = SavWriter.write(metadata, finalRecords);
     const buffer = Buffer.from(arrayBuffer);
 
-    const filename = `pesquisa_pausa_${filenameSuffix}_${new Date().toISOString().split("T")[0]}.sav`;
+    const filename = `pesquisa_pausa_${filenameSuffix}_${getDateInSaoPaulo(new Date())}.sav`;
 
     res.setHeader("Content-Type", "application/octet-stream");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
@@ -315,7 +320,7 @@ router.post("/export/spss-filtered", async (req, res) => {
         participant_number: participant?.participantNumber ?? "",
         group: participant?.group === "intervention" ? 1 : 2,
         start_date: participant?.startDate
-          ? new Date(participant.startDate).toISOString().split("T")[0]
+          ? getDateInSaoPaulo(new Date(participant.startDate))
           : "",
         day_number: r.dayNumber,
         wb_antes: r.wellbeingBefore ?? null,
@@ -325,13 +330,13 @@ router.post("/export/spss-filtered", async (req, res) => {
           : null,
         current_activity: r.currentActivity ?? "",
         response_date: r.responseDate
-          ? new Date(r.responseDate).toISOString().split("T")[0]
+          ? getDateInSaoPaulo(new Date(r.responseDate))
           : "",
         audio_number: audio?.audioNumber ?? null,
         audio_pct_listened: audio?.percentageListened ?? null,
         audio_completed: audio != null ? (audio.completed ? 1 : 0) : null,
         audio_access_date: audio?.accessDate
-          ? new Date(audio.accessDate).toISOString().split("T")[0]
+          ? getDateInSaoPaulo(new Date(audio.accessDate))
           : "",
       };
     });
@@ -383,7 +388,7 @@ router.post("/export/spss-filtered", async (req, res) => {
     const arrayBuffer = SavWriter.write(metadata, finalRecords);
     const buffer = Buffer.from(arrayBuffer);
 
-    const filename = `pesquisa_pausa_filtrado_${new Date().toISOString().split("T")[0]}.sav`;
+    const filename = `pesquisa_pausa_filtrado_${getDateInSaoPaulo(new Date())}.sav`;
     res.setHeader("Content-Type", "application/octet-stream");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
     res.setHeader("Content-Length", buffer.length);
