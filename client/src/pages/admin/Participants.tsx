@@ -12,6 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { trpc } from "@/lib/trpc";
 import { Plus, Download, RefreshCw } from "lucide-react";
 import { useState } from "react";
@@ -19,6 +20,7 @@ import { toast } from "sonner";
 
 export default function AdminParticipants() {
   const [count, setCount] = useState(1);
+  const [group, setGroup] = useState<"intervention" | "control">("intervention");
   const { data: participants, isLoading, refetch } = trpc.participants.list.useQuery();
   const createMutation = trpc.participants.create.useMutation({
     onSuccess: (data) => {
@@ -36,7 +38,7 @@ export default function AdminParticipants() {
       toast.error("Quantidade deve ser entre 1 e 100");
       return;
     }
-    createMutation.mutate({ count });
+    createMutation.mutate({ count, group });
   };
 
   const handleExport = () => {
@@ -91,11 +93,29 @@ export default function AdminParticipants() {
           <CardHeader>
             <CardTitle>Criar Novos Participantes</CardTitle>
             <CardDescription>
-              O sistema irá gerar números únicos e randomizar automaticamente os grupos
+              O sistema irá gerar números únicos para o grupo selecionado
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex gap-4 items-end">
+            <div className="flex flex-wrap gap-4 items-end">
+              <div>
+                <Label className="mb-1 block">Grupo</Label>
+                <ToggleGroup
+                  type="single"
+                  variant="outline"
+                  value={group}
+                  onValueChange={(value) => {
+                    if (value) setGroup(value as "intervention" | "control");
+                  }}
+                >
+                  <ToggleGroupItem value="intervention" className="px-4">
+                    Intervenção
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="control" className="px-4">
+                    Controle
+                  </ToggleGroupItem>
+                </ToggleGroup>
+              </div>
               <div className="flex-1 max-w-xs">
                 <Label htmlFor="count">Quantidade</Label>
                 <Input

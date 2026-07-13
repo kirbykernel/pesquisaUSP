@@ -147,7 +147,7 @@ export default function AdminDashboard() {
                 <div>
                   <p className="text-sm font-medium">Cadastrar Participantes</p>
                   <p className="text-xs text-muted-foreground">
-                    Crie os números de identificação e randomize os grupos
+                    Crie os números de identificação no grupo desejado
                   </p>
                 </div>
               </div>

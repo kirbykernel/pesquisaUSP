@@ -14,11 +14,6 @@ function generateParticipantNumber(): string {
   return `P${timestamp}${random}`;
 }
 
-// Helper para randomizar grupo
-function randomizeGroup(): "intervention" | "control" {
-  return Math.random() < 0.5 ? "intervention" : "control";
-}
-
 // Data de calendário no fuso dos participantes (pesquisa conduzida no Brasil)
 function getDateInSaoPaulo(date: Date): string {
   return date.toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
@@ -39,16 +34,17 @@ export const appRouter = router({
 
   // ============= PARTICIPANTS =============
   participants: router({
-    // Criar participante com randomização automática
+    // Criar participantes no grupo escolhido pelo admin
     create: protectedProcedure
       .input(z.object({
         count: z.number().min(1).max(100).optional().default(1),
+        group: z.enum(["intervention", "control"]),
       }))
       .mutation(async ({ input }) => {
         const created = [];
         for (let i = 0; i < input.count; i++) {
           let participantNumber = generateParticipantNumber();
-          
+
           // Garantir que o número é único
           let existing = await db.getParticipantByNumber(participantNumber);
           while (existing) {
@@ -56,16 +52,14 @@ export const appRouter = router({
             existing = await db.getParticipantByNumber(participantNumber);
           }
 
-          const group = randomizeGroup();
-          
           await db.createParticipant({
             participantNumber,
-            group,
+            group: input.group,
             startDate: new Date(), // Data de início é hoje
             active: true,
           });
 
-          created.push({ participantNumber, group });
+          created.push({ participantNumber, group: input.group });
         }
 
         return { success: true, participants: created };
