@@ -315,7 +315,7 @@ export default function AdminData() {
       const suffix = parts.length > 0
         ? parts.join("_").replace(/[^a-z0-9]/gi, "_").toLowerCase()
         : "filtrado";
-      link.download = `pesquisa_pausa_${suffix}_${new Date().toISOString().split("T")[0]}.sav`;
+      link.download = `pesquisa_pausa_${suffix}_${new Date().toLocaleDateString("en-CA")}.sav`;
       link.click();
       URL.revokeObjectURL(url);
       toast.success(`SPSS exportado: ${ids.length} registros filtrados!`);

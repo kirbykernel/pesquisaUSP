@@ -54,7 +54,7 @@ export default function AdminReports() {
     const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = `respostas_diarias_${new Date().toISOString().split("T")[0]}.csv`;
+    link.download = `respostas_diarias_${new Date().toLocaleDateString("en-CA")}.csv`;
     link.click();
     toast.success("Respostas exportadas com sucesso!");
   };
@@ -87,7 +87,7 @@ export default function AdminReports() {
     const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = `progresso_audios_${new Date().toISOString().split("T")[0]}.csv`;
+    link.download = `progresso_audios_${new Date().toLocaleDateString("en-CA")}.csv`;
     link.click();
     toast.success("Progresso de áudios exportado com sucesso!");
   };
@@ -126,7 +126,7 @@ export default function AdminReports() {
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
     const groupName = group === "intervention" ? "intervencao" : "controle";
-    link.download = `respostas_${groupName}_${new Date().toISOString().split("T")[0]}.csv`;
+    link.download = `respostas_${groupName}_${new Date().toLocaleDateString("en-CA")}.csv`;
     link.click();
     toast.success(`Respostas do grupo ${group === "intervention" ? "intervenção" : "controle"} exportadas!`);
   };
@@ -201,7 +201,7 @@ export default function AdminReports() {
     const blob = new Blob(["\uFEFF" + content], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = `relatorio_completo_${new Date().toISOString().split("T")[0]}.csv`;
+    link.download = `relatorio_completo_${new Date().toLocaleDateString("en-CA")}.csv`;
     link.click();
     toast.success("Relatório completo exportado com sucesso!");
   };
@@ -220,7 +220,7 @@ export default function AdminReports() {
     const objectUrl = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = objectUrl;
-    link.download = `pesquisa_pausa_${suffix}_${new Date().toISOString().split("T")[0]}.sav`;
+    link.download = `pesquisa_pausa_${suffix}_${new Date().toLocaleDateString("en-CA")}.sav`;
     link.click();
     URL.revokeObjectURL(objectUrl);
   };

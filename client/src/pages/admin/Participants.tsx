@@ -60,7 +60,7 @@ export default function AdminParticipants() {
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = `participantes_${new Date().toISOString().split("T")[0]}.csv`;
+    link.download = `participantes_${new Date().toLocaleDateString("en-CA")}.csv`;
     link.click();
     toast.success("Lista exportada com sucesso!");
   };
