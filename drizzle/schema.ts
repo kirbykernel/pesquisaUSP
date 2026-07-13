@@ -38,7 +38,8 @@ export const participants = mysqlTable("participants", {
   id: int("id").autoincrement().primaryKey(),
   participantNumber: varchar("participantNumber", { length: 20 }).notNull().unique(), // Número único de identificação
   group: mysqlEnum("group", ["intervention", "control"]).notNull(), // Grupo: intervenção ou controle
-  startDate: timestamp("startDate"), // Data de início da participação (dia 1)
+  startDate: timestamp("startDate"), // Data de criação do registro (mantido como histórico)
+  firstLoginAt: timestamp("firstLoginAt"), // Primeiro login — âncora do dia 1 do protocolo (28 dias corridos)
   randomizedAt: timestamp("randomizedAt").defaultNow().notNull(), // Data da randomização
   active: boolean("active").default(true).notNull(), // Participante ativo ou não
   createdAt: timestamp("createdAt").defaultNow().notNull(),

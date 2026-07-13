@@ -19,6 +19,14 @@ function getDateInSaoPaulo(date: Date): string {
   return date.toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
 }
 
+// Dia do protocolo (1-28+) = dias de calendário corridos desde o primeiro login,
+// no fuso America/Sao_Paulo. Dia perdido não é recuperado; após o dia 28 o ciclo encerra.
+function getProtocolDay(firstLoginAt: Date, now: Date = new Date()): number {
+  const first = Date.parse(getDateInSaoPaulo(firstLoginAt));
+  const today = Date.parse(getDateInSaoPaulo(now));
+  return Math.round((today - first) / 86_400_000) + 1;
+}
+
 export const appRouter = router({
   system: systemRouter,
   auth: router({
@@ -83,8 +91,71 @@ export const appRouter = router({
             message: "Participante não encontrado",
           });
         }
-        return participant;
+
+        // Primeiro login: registra a âncora do dia 1 do protocolo.
+        // Todo acesso do participante (login e app) passa por aqui, então o
+        // primeiro acesso de qualquer sessão define o início da contagem.
+        let firstLoginAt = participant.firstLoginAt;
+        if (!firstLoginAt) {
+          firstLoginAt = new Date();
+          await db.setParticipantFirstLogin(participant.id, firstLoginAt);
+        }
+
+        // Dia atual calculado no servidor — o cliente nunca calcula o dia
+        return {
+          ...participant,
+          firstLoginAt,
+          currentDay: getProtocolDay(firstLoginAt),
+        };
       }),
+
+    // Adesão por participante: dia atual, práticas completadas e dias perdidos.
+    // Dia perdido = dia de calendário já encerrado (anterior a hoje, até o dia 28)
+    // sem resposta registrada. O dia de hoje ainda está em andamento e não conta.
+    progressOverview: protectedProcedure.query(async () => {
+      const [allParticipants, allResponses] = await Promise.all([
+        db.getAllParticipants(),
+        db.getAllDailyResponses(),
+      ]);
+
+      const responsesByParticipant = new Map<number, Set<number>>();
+      for (const r of allResponses) {
+        let days = responsesByParticipant.get(r.participantId);
+        if (!days) {
+          days = new Set();
+          responsesByParticipant.set(r.participantId, days);
+        }
+        days.add(r.dayNumber);
+      }
+
+      return allParticipants.map(p => {
+        if (!p.firstLoginAt) {
+          // Nunca acessou: o ciclo ainda não começou
+          return {
+            participantId: p.id,
+            currentDay: null,
+            completedCount: 0,
+            missedDays: [] as number[],
+          };
+        }
+
+        const currentDay = getProtocolDay(p.firstLoginAt);
+        const respondedDays = responsesByParticipant.get(p.id) ?? new Set<number>();
+        const lastClosedDay = Math.min(currentDay - 1, 28);
+
+        const missedDays: number[] = [];
+        for (let day = 1; day <= lastClosedDay; day++) {
+          if (!respondedDays.has(day)) missedDays.push(day);
+        }
+
+        return {
+          participantId: p.id,
+          currentDay,
+          completedCount: respondedDays.size,
+          missedDays,
+        };
+      });
+    }),
 
     // Estatísticas
     stats: protectedProcedure.query(async () => {
@@ -243,8 +314,8 @@ export const appRouter = router({
         return await db.getDailyResponsesByParticipant(input.participantId);
       }),
 
-    // Criar resposta diária — modelo de fases: o dia é calculado no servidor
-    // a partir das práticas já completadas, nunca informado pelo cliente
+    // Criar resposta diária — modelo de calendário: o dia é calculado no servidor
+    // a partir do primeiro login do participante, nunca informado pelo cliente
     create: publicProcedure
       .input(z.object({
         participantId: z.number(),
@@ -255,17 +326,27 @@ export const appRouter = router({
         responseDate: z.date().optional(),
       }))
       .mutation(async ({ input }) => {
-        const existing = await db.getDailyResponsesByParticipant(input.participantId);
-
-        // Ciclo completo: 28 práticas realizadas
-        if (existing.length >= 28) {
+        const participant = await db.getParticipantById(input.participantId);
+        if (!participant || !participant.firstLoginAt) {
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: "Você já completou os 28 dias da pesquisa. Obrigado pela participação!",
+            message: "Participante não encontrado ou sem primeiro login registrado",
+          });
+        }
+
+        // Dia atual = dias corridos desde o primeiro login (America/Sao_Paulo)
+        const dayNumber = getProtocolDay(participant.firstLoginAt);
+
+        // Ciclo encerra após o dia 28
+        if (dayNumber > 28) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Sua participação de 28 dias foi concluída. Obrigado pela participação!",
           });
         }
 
         // Apenas uma prática por dia de calendário
+        const existing = await db.getDailyResponsesByParticipant(input.participantId);
         const today = getDateInSaoPaulo(new Date());
         const respondedToday = existing.some(
           r => getDateInSaoPaulo(new Date(r.responseDate)) === today
@@ -276,9 +357,6 @@ export const appRouter = router({
             message: "Você já respondeu hoje. Volte amanhã!",
           });
         }
-
-        // Próximo dia = práticas completadas + 1 (avança apenas ao completar)
-        const dayNumber = existing.length + 1;
 
         await db.createDailyResponse({
           participantId: input.participantId,

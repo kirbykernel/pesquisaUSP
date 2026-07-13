@@ -87,8 +87,8 @@ router.get("/export/spss", async (req, res) => {
         id_interno: r.participantId,
         participant_number: participant?.participantNumber ?? "",
         group: participant?.group === "intervention" ? 1 : 2,
-        start_date: participant?.startDate
-          ? getDateInSaoPaulo(new Date(participant.startDate))
+        start_date: participant?.firstLoginAt
+          ? getDateInSaoPaulo(new Date(participant.firstLoginAt))
           : "",
         day_number: r.dayNumber,
         wb_antes: r.wellbeingBefore ?? null,
@@ -142,7 +142,7 @@ router.get("/export/spss", async (req, res) => {
       {
         name: "start_date",
         type: 10,
-        label: "Data de Inicio (AAAA-MM-DD)",
+        label: "Data de Inicio - Primeiro Login (AAAA-MM-DD)",
       },
       {
         name: "day_number",
@@ -319,8 +319,8 @@ router.post("/export/spss-filtered", async (req, res) => {
         id_interno: r.participantId,
         participant_number: participant?.participantNumber ?? "",
         group: participant?.group === "intervention" ? 1 : 2,
-        start_date: participant?.startDate
-          ? getDateInSaoPaulo(new Date(participant.startDate))
+        start_date: participant?.firstLoginAt
+          ? getDateInSaoPaulo(new Date(participant.firstLoginAt))
           : "",
         day_number: r.dayNumber,
         wb_antes: r.wellbeingBefore ?? null,
@@ -360,7 +360,7 @@ router.post("/export/spss-filtered", async (req, res) => {
         printFormat: "F1.0",
         values: { "1": "Intervencao", "2": "Controle" },
       } as SavVariable] : []),
-      { name: "start_date", type: 10, label: "Data de Inicio (AAAA-MM-DD)" },
+      { name: "start_date", type: 10, label: "Data de Inicio - Primeiro Login (AAAA-MM-DD)" },
       { name: "day_number", type: 0, label: "Dia do Protocolo (1-28)", printFormat: "F2.0" },
       { name: "wb_antes", type: 0, label: "Bem-Estar ANTES da Pausa (1-5)", printFormat: "F1.0", values: wellbeingValues },
       { name: "wb_depois", type: 0, label: "Bem-Estar DEPOIS da Pausa (1-5)", printFormat: "F1.0", values: wellbeingValues },

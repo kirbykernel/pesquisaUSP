@@ -128,6 +128,29 @@ export async function getParticipantByNumber(participantNumber: string) {
   return result.length > 0 ? result[0] : null;
 }
 
+export async function getParticipantById(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db
+    .select()
+    .from(participants)
+    .where(eq(participants.id, id))
+    .limit(1);
+
+  return result.length > 0 ? result[0] : null;
+}
+
+export async function setParticipantFirstLogin(id: number, date: Date) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db
+    .update(participants)
+    .set({ firstLoginAt: date })
+    .where(eq(participants.id, id));
+}
+
 export async function getAllParticipants() {
   const db = await getDb();
   if (!db) throw new Error("Database not available");

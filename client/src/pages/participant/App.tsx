@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { LogOut, Bell, BellOff, Calendar, TrendingUp, Wifi, WifiOff, Clock, CheckCircle2, AlertTriangle } from "lucide-react";
+import { LogOut, Calendar, Wifi, WifiOff, Clock, CheckCircle2, AlertTriangle } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,8 +19,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import AudioPlayer from "@/components/AudioPlayer";
 import WellbeingScale from "@/components/WellbeingScale";
-import ProgressPanel from "@/components/ProgressPanel";
-import { useNotifications } from "@/hooks/useNotifications";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { useBranding } from "@/hooks/useBranding";
 
@@ -32,7 +30,6 @@ export default function ParticipantApp() {
   const [wellbeingBefore, setWellbeingBefore] = useState<number | null>(null);
   const [wellbeingAfter, setWellbeingAfter] = useState<number | null>(null);
   const [currentActivity, setCurrentActivity] = useState("");
-  const [showProgress, setShowProgress] = useState(false);
   // Controla se o participante escolheu pular o vídeo nesta sessão
   const [skippedVideoThisSession, setSkippedVideoThisSession] = useState(false);
 
@@ -62,7 +59,6 @@ export default function ParticipantApp() {
   // Controle do dialog de confirmação de saída
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
 
-  const { permission: notificationPermission, requestPermission } = useNotifications();
   const { isOnline } = useOnlineStatus();
   const { loginTitle, researcherLine1, researcherLine2, logoUrl } = useBranding();
 
@@ -94,27 +90,28 @@ export default function ParticipantApp() {
     ? parseInt(pauseDurationSettings.value) * 60
     : 780;
 
-  // Buscar respostas do participante — o progresso é baseado em práticas completadas
-  // (modelo de fases: o dia só avança quando a prática do dia anterior foi enviada)
+  // Buscar respostas do participante (práticas enviadas — usado para "já respondeu hoje"
+  // e para a contagem de práticas completadas)
   const { data: participantResponses, isLoading: loadingResponses } = trpc.responses.getByParticipant.useQuery(
     { participantId: participant?.id || 0 },
     { enabled: !!participant?.id }
   );
 
-  const completedDays = (participantResponses ?? []).map(r => r.dayNumber);
-  const completedCount = completedDays.length;
+  const completedCount = (participantResponses ?? []).length;
 
-  // Ciclo completo: 28 práticas realizadas
-  const hasFinishedStudy = completedCount >= 28;
-
-  // Dia atual = próxima fase a completar
-  const currentDay = Math.min(completedCount + 1, 28);
+  // Dia atual = dias de calendário desde o primeiro login, calculado NO SERVIDOR
+  // (modelo de calendário: dia perdido não é recuperado)
+  const currentDay = participant?.currentDay ?? 1;
 
   // Já respondeu hoje? (apenas uma prática por dia de calendário)
   const todayStr = new Date().toDateString();
   const alreadyRespondedToday = (participantResponses ?? []).some(
     r => new Date(r.responseDate).toDateString() === todayStr
   );
+
+  // Pesquisa encerrada: passou do dia 28, ou completou a prática do dia 28
+  const hasFinishedStudy =
+    currentDay > 28 || (currentDay === 28 && (hasCompletedToday || alreadyRespondedToday));
 
   // Verificar progresso do áudio de hoje (grupo intervenção)
   const { data: audioProgressList, isFetched: audioProgressFetched } = trpc.audioProgress.getByParticipant.useQuery(
@@ -213,7 +210,7 @@ export default function ParticipantApp() {
     (participant.group === "control" && timerSeconds > 0)
   );
 
-  // Atividade em andamento NESTE INSTANTE — bloqueia sair e "Ver Progresso" apenas
+  // Atividade em andamento NESTE INSTANTE — bloqueia sair apenas
   // enquanto o áudio toca ou o cronômetro corre; pausou, libera (igual nos dois grupos).
   // Navegar com áudio pausado é seguro: o progresso é salvo no pause e o player retoma da posição
   const activityInProgress =
@@ -232,20 +229,6 @@ export default function ParticipantApp() {
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [hasUnsavedProgress]);
-
-  // Solicitar permissão de notificações após 3 segundos (apenas uma vez, silenciosamente)
-  useEffect(() => {
-    if (notificationPermission === "default") {
-      const timer = setTimeout(() => {
-        // silent=true: não exibe toast de erro se o navegador não suportar
-        requestPermission(true);
-      }, 3000);
-      return () => clearTimeout(timer);
-    }
-    // Não incluir requestPermission nas dependências: é estabilizado com useCallback
-    // e incluí-lo causaria re-disparo desnecessário em cada render
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [notificationPermission]);
 
   // Cronômetro para grupo controle
   useEffect(() => {
@@ -406,7 +389,7 @@ export default function ParticipantApp() {
               <div className="text-5xl">🏆</div>
             </div>
             <CardTitle className="text-green-900">Pesquisa Concluída!</CardTitle>
-            <CardDescription>Você completou todos os 28 dias</CardDescription>
+            <CardDescription>Seu ciclo de 28 dias foi finalizado</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="bg-green-50 p-4 rounded-lg border border-green-200">
@@ -416,7 +399,7 @@ export default function ParticipantApp() {
               </p>
             </div>
             <div className="text-center text-sm text-muted-foreground">
-              <p>28 de 28 dias completados</p>
+              <p>{completedCount} de 28 práticas completadas</p>
             </div>
             <div className="flex justify-center">
               <Button onClick={handleLogout} variant="outline" className="w-full max-w-xs">
@@ -559,11 +542,6 @@ export default function ParticipantApp() {
               ) : (
                 <WifiOff className="h-5 w-5 text-orange-600" />
               )}
-              {notificationPermission === "granted" ? (
-                <Bell className="h-5 w-5 text-green-600" />
-              ) : (
-                <BellOff className="h-5 w-5 text-gray-400" />
-              )}
 {/* Bloquear logout durante áudio (intervenção) ou cronometro rodando (controle) */}
               {activityInProgress ? (
                 <div className="relative group">
@@ -650,22 +628,6 @@ export default function ParticipantApp() {
               </Button>
             </CardContent>
           </Card>
-        ) : showProgress ? (
-          <Card>
-            <CardHeader>
-              <CardTitle>Seu Progresso</CardTitle>
-              <CardDescription>Acompanhe sua jornada de 28 dias</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ProgressPanel
-                currentDay={currentDay}
-                completedDays={completedDays}
-              />
-              <Button onClick={() => setShowProgress(false)} variant="outline" className="w-full mt-4">
-                Fechar
-              </Button>
-            </CardContent>
-          </Card>
         ) : (
           <div className="space-y-6">
             {/* Aviso de resposta não enviada */}
@@ -692,19 +654,6 @@ export default function ParticipantApp() {
                 <CardDescription>
                   {new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" })}
                 </CardDescription>
-                <Button
-                  onClick={() => setShowProgress(true)}
-                  variant="ghost"
-                  size="sm"
-                  disabled={activityInProgress}
-                  className={activityInProgress ? "mx-auto opacity-40 cursor-not-allowed" : "mx-auto text-blue-600"}
-                  title={activityInProgress
-                    ? (participant.group === "control" ? "Complete a pausa antes de ver o progresso" : "Complete o áudio antes de ver o progresso")
-                    : undefined}
-                >
-                  <TrendingUp className="h-4 w-4 mr-2" />
-                  Ver Progresso
-                </Button>
               </CardHeader>
             </Card>
 

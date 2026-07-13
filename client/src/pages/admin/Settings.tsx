@@ -5,15 +5,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { Bell, Clock, Info, AlertTriangle } from "lucide-react";
+import { Clock, Info, AlertTriangle } from "lucide-react";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 
 export default function AdminSettings() {
-  const [notificationHour, setNotificationHour] = useState(12);
-  const [notificationMinute, setNotificationMinute] = useState(0);
-  
   // Configurações de horário de acesso
   const [accessRestrictionEnabled, setAccessRestrictionEnabled] = useState(true);
   const [startHour, setStartHour] = useState(10);
@@ -96,26 +93,6 @@ export default function AdminSettings() {
   useEffect(() => {
     if (logoSettings?.value) setLogoUrl(logoSettings.value);
   }, [logoSettings]);
-
-  const handleSaveNotificationTime = () => {
-    if (notificationHour < 0 || notificationHour > 23) {
-      toast.error("Hora deve estar entre 0 e 23");
-      return;
-    }
-
-    if (notificationMinute < 0 || notificationMinute > 59) {
-      toast.error("Minutos devem estar entre 0 e 59");
-      return;
-    }
-
-    // Salvar no localStorage (será usado pelos participantes)
-    localStorage.setItem('defaultNotificationTime', JSON.stringify({
-      hour: notificationHour,
-      minute: notificationMinute,
-    }));
-
-    toast.success(`Horário padrão de notificações configurado para ${notificationHour.toString().padStart(2, '0')}:${notificationMinute.toString().padStart(2, '0')}`);
-  };
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -585,89 +562,6 @@ export default function AdminSettings() {
           </CardContent>
         </Card>
 
-        {/* Notificações Push */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Bell className="h-5 w-5 text-blue-600" />
-              <CardTitle>Notificações Push</CardTitle>
-            </div>
-            <CardDescription>
-              Configure o horário padrão para lembretes diários aos participantes
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="hour">Hora</Label>
-                <Input
-                  id="hour"
-                  type="number"
-                  min="0"
-                  max="23"
-                  value={notificationHour}
-                  onChange={(e) => setNotificationHour(parseInt(e.target.value) || 0)}
-                  placeholder="12"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="minute">Minutos</Label>
-                <Input
-                  id="minute"
-                  type="number"
-                  min="0"
-                  max="59"
-                  value={notificationMinute}
-                  onChange={(e) => setNotificationMinute(parseInt(e.target.value) || 0)}
-                  placeholder="00"
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Clock className="h-4 w-4" />
-              <span>
-                Horário configurado: {notificationHour.toString().padStart(2, '0')}:{notificationMinute.toString().padStart(2, '0')}
-              </span>
-            </div>
-
-            <Button onClick={handleSaveNotificationTime} className="w-full">
-              Salvar Horário de Notificações
-            </Button>
-          </CardContent>
-        </Card>
-
-        {/* Informações sobre Notificações */}
-        <Card className="border-blue-200 bg-blue-50">
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Info className="h-5 w-5 text-blue-600" />
-              <CardTitle className="text-blue-900">Como Funcionam as Notificações</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent className="text-sm text-blue-800 space-y-2">
-            <p><strong>Notificações Locais:</strong> O sistema usa notificações locais agendadas no dispositivo do participante. Não requer servidor de push.</p>
-            
-            <p><strong>Permissão:</strong> Cada participante precisa autorizar notificações ao acessar o aplicativo pela primeira vez.</p>
-            
-            <p><strong>Funcionamento:</strong></p>
-            <ul className="list-disc list-inside space-y-1 ml-2">
-              <li>O participante recebe um lembrete diário no horário configurado</li>
-              <li>A notificação funciona mesmo com o app fechado (se o navegador permitir)</li>
-              <li>Ao clicar na notificação, o app abre diretamente</li>
-              <li>As notificações são reagendadas automaticamente para o próximo dia</li>
-            </ul>
-
-            <p><strong>Compatibilidade:</strong></p>
-            <ul className="list-disc list-inside space-y-1 ml-2">
-              <li>✅ Android (Chrome, Firefox, Edge) - Funciona perfeitamente</li>
-              <li>⚠️ iOS (Safari) - Limitado, requer app aberto em background</li>
-              <li>✅ Desktop (todos os navegadores modernos)</li>
-            </ul>
-
-            <p className="pt-2"><strong>Recomendação:</strong> Configure o horário para um momento dentro do período permitido para maximizar a taxa de resposta.</p>
-          </CardContent>
-        </Card>
       </div>
     </DashboardLayout>
   );

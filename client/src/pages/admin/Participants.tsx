@@ -22,10 +22,17 @@ export default function AdminParticipants() {
   const [count, setCount] = useState(1);
   const [group, setGroup] = useState<"intervention" | "control">("intervention");
   const { data: participants, isLoading, refetch } = trpc.participants.list.useQuery();
+  const { data: progressOverview, refetch: refetchProgress } = trpc.participants.progressOverview.useQuery();
+
+  // Mapa participantId -> adesão (dia atual, práticas, dias perdidos)
+  const progressById = new Map(
+    (progressOverview ?? []).map((p) => [p.participantId, p])
+  );
   const createMutation = trpc.participants.create.useMutation({
     onSuccess: (data) => {
       toast.success(`${data.participants.length} participante(s) criado(s) com sucesso!`);
       refetch();
+      refetchProgress();
       setCount(1);
     },
     onError: (error) => {
@@ -48,13 +55,24 @@ export default function AdminParticipants() {
     }
 
     const csv = [
-      ["Número", "Grupo", "Status", "Data de Cadastro"],
-      ...participants.map((p) => [
-        p.participantNumber,
-        p.group === "intervention" ? "Intervenção" : "Controle",
-        p.active ? "Ativo" : "Inativo",
-        new Date(p.createdAt).toLocaleDateString("pt-BR"),
-      ]),
+      ["Número", "Grupo", "Status", "Data de Cadastro", "Dia Atual", "Práticas Completadas", "Dias Perdidos", "Quais Dias Perdidos"],
+      ...participants.map((p) => {
+        const progress = progressById.get(p.id);
+        return [
+          p.participantNumber,
+          p.group === "intervention" ? "Intervenção" : "Controle",
+          p.active ? "Ativo" : "Inativo",
+          new Date(p.createdAt).toLocaleDateString("pt-BR"),
+          progress?.currentDay == null
+            ? "Não iniciou"
+            : progress.currentDay > 28
+              ? "Concluído"
+              : String(progress.currentDay),
+          String(progress?.completedCount ?? 0),
+          String(progress?.missedDays.length ?? 0),
+          (progress?.missedDays ?? []).join(" "),
+        ];
+      }),
     ]
       .map((row) => row.join(","))
       .join("\n");
@@ -78,7 +96,7 @@ export default function AdminParticipants() {
             </p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => refetch()}>
+            <Button variant="outline" onClick={() => { refetch(); refetchProgress(); }}>
               <RefreshCw className="h-4 w-4 mr-2" />
               Atualizar
             </Button>
@@ -170,10 +188,16 @@ export default function AdminParticipants() {
                       <TableHead>Grupo</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Data de Cadastro</TableHead>
+                      <TableHead>Dia Atual</TableHead>
+                      <TableHead>Práticas</TableHead>
+                      <TableHead>Dias Perdidos</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {participants.map((participant) => (
+                    {participants.map((participant) => {
+                      const progress = progressById.get(participant.id);
+                      const missedCount = progress?.missedDays.length ?? 0;
+                      return (
                       <TableRow key={participant.id}>
                         <TableCell className="font-mono font-medium">
                           {participant.participantNumber}
@@ -208,8 +232,35 @@ export default function AdminParticipants() {
                             }
                           )}
                         </TableCell>
+                        <TableCell>
+                          {progress?.currentDay == null ? (
+                            <span className="text-muted-foreground text-sm">Não iniciou</span>
+                          ) : progress.currentDay > 28 ? (
+                            <Badge variant="outline" className="border-green-500 text-green-700">
+                              Concluído
+                            </Badge>
+                          ) : (
+                            <span className="font-medium">{progress.currentDay} / 28</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {progress?.completedCount ?? 0}
+                        </TableCell>
+                        <TableCell>
+                          {missedCount === 0 ? (
+                            <span className="text-muted-foreground">0</span>
+                          ) : (
+                            <Badge
+                              variant="destructive"
+                              title={`Dias perdidos: ${progress!.missedDays.join(", ")}`}
+                            >
+                              {missedCount} {missedCount === 1 ? "dia" : "dias"}
+                            </Badge>
+                          )}
+                        </TableCell>
                       </TableRow>
-                    ))}
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>
