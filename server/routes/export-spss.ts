@@ -79,15 +79,15 @@ router.get("/export/spss", async (req, res) => {
       const audio = audioMap.get(audioKey);
 
       return {
-        participant_id: r.participantId,
+        id_interno: r.participantId,
         participant_number: participant?.participantNumber ?? "",
         group: participant?.group === "intervention" ? 1 : 2,
         start_date: participant?.startDate
           ? new Date(participant.startDate).toISOString().split("T")[0]
           : "",
         day_number: r.dayNumber,
-        wellbeing_before: r.wellbeingBefore ?? null,
-        wellbeing_after: r.wellbeingAfter ?? null,
+        wb_antes: r.wellbeingBefore ?? null,
+        wb_depois: r.wellbeingAfter ?? null,
         pause_duration_min: r.pauseDuration != null
           ? Math.round(r.pauseDuration / 60)
           : null,
@@ -116,7 +116,7 @@ router.get("/export/spss", async (req, res) => {
     // For group-specific files, omit the group variable (it's constant)
     const sysvars: SavVariable[] = [
       {
-        name: "participant_id",
+        name: "id_interno",
         type: 0,
         label: "ID do Participante",
         printFormat: "F8.0",
@@ -146,14 +146,14 @@ router.get("/export/spss", async (req, res) => {
         printFormat: "F2.0",
       },
       {
-        name: "wellbeing_before",
+        name: "wb_antes",
         type: 0,
         label: "Bem-Estar ANTES da Pausa (1-5)",
         printFormat: "F1.0",
         values: wellbeingValues,
       },
       {
-        name: "wellbeing_after",
+        name: "wb_depois",
         type: 0,
         label: "Bem-Estar DEPOIS da Pausa (1-5)",
         printFormat: "F1.0",
@@ -311,15 +311,15 @@ router.post("/export/spss-filtered", async (req, res) => {
       const audio = audioMap.get(audioKey);
 
       return {
-        participant_id: r.participantId,
+        id_interno: r.participantId,
         participant_number: participant?.participantNumber ?? "",
         group: participant?.group === "intervention" ? 1 : 2,
         start_date: participant?.startDate
           ? new Date(participant.startDate).toISOString().split("T")[0]
           : "",
         day_number: r.dayNumber,
-        wellbeing_before: r.wellbeingBefore ?? null,
-        wellbeing_after: r.wellbeingAfter ?? null,
+        wb_antes: r.wellbeingBefore ?? null,
+        wb_depois: r.wellbeingAfter ?? null,
         pause_duration_min: r.pauseDuration != null
           ? Math.round(r.pauseDuration / 60)
           : null,
@@ -345,7 +345,7 @@ router.post("/export/spss-filtered", async (req, res) => {
     };
 
     const sysvars: SavVariable[] = [
-      { name: "participant_id", type: 0, label: "ID do Participante", printFormat: "F8.0" },
+      { name: "id_interno", type: 0, label: "ID do Participante", printFormat: "F8.0" },
       { name: "participant_number", type: 20, label: "Numero do Participante" },
       // Include group column when mixed groups are present
       ...(isMixed ? [{
@@ -357,8 +357,8 @@ router.post("/export/spss-filtered", async (req, res) => {
       } as SavVariable] : []),
       { name: "start_date", type: 10, label: "Data de Inicio (AAAA-MM-DD)" },
       { name: "day_number", type: 0, label: "Dia do Protocolo (1-28)", printFormat: "F2.0" },
-      { name: "wellbeing_before", type: 0, label: "Bem-Estar ANTES da Pausa (1-5)", printFormat: "F1.0", values: wellbeingValues },
-      { name: "wellbeing_after", type: 0, label: "Bem-Estar DEPOIS da Pausa (1-5)", printFormat: "F1.0", values: wellbeingValues },
+      { name: "wb_antes", type: 0, label: "Bem-Estar ANTES da Pausa (1-5)", printFormat: "F1.0", values: wellbeingValues },
+      { name: "wb_depois", type: 0, label: "Bem-Estar DEPOIS da Pausa (1-5)", printFormat: "F1.0", values: wellbeingValues },
       { name: "pause_duration_min", type: 0, label: "Duracao da Pausa (minutos)", printFormat: "F4.1" },
       { name: "current_activity", type: 100, label: "Atividade Atual" },
       { name: "response_date", type: 10, label: "Data da Resposta (AAAA-MM-DD)" },
