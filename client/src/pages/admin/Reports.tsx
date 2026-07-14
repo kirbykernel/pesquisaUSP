@@ -12,8 +12,10 @@ export default function AdminReports() {
   const { data: participants } = trpc.participants.list.useQuery();
   const { data: responses } = trpc.responses.getAll.useQuery();
   const { data: audioProgress } = trpc.audioProgress.getAll.useQuery();
+  const { data: progressOverview } = trpc.participants.progressOverview.useQuery();
   const [spssLoading, setSpssLoading] = useState(false);
   const [spssGroupLoading, setSpssGroupLoading] = useState<"intervention" | "control" | null>(null);
+  const [spssGeneralLoading, setSpssGeneralLoading] = useState<"all" | "intervention" | "control" | null>(null);
 
   // Estatísticas rápidas
   const stats = {
@@ -27,14 +29,18 @@ export default function AdminReports() {
   // ─── CSV helpers ──────────────────────────────────────────────────────────
 
   const handleExportResponses = () => {
-    if (!responses || responses.length === 0) {
-      toast.error("Não há respostas para exportar");
+    if (!participants || participants.length === 0) {
+      toast.error("Não há participantes cadastrados");
       return;
     }
 
+    // Participantes sem nenhuma resposta também entram (linha com "-") —
+    // o export não pode ser bloqueado nem ocultar participantes por falta de respostas
+    const respondedIds = new Set((responses ?? []).map(r => r.participantId));
+
     const csv = [
       ["ID Participante", "Número Participante", "Grupo", "Dia", "Bem-Estar ANTES (1-5)", "Bem-Estar DEPOIS (1-5)", "Duração Pausa (min)", "Atividade Atual", "Data/Hora"],
-      ...responses.map((r) => {
+      ...(responses ?? []).map((r) => {
         const participant = participants?.find(p => p.id === r.participantId);
         return [
           r.participantId,
@@ -46,8 +52,16 @@ export default function AdminReports() {
           r.pauseDuration ? Math.floor(r.pauseDuration / 60) : "N/A",
           r.currentActivity || "",
           new Date(r.responseDate).toLocaleString("pt-BR"),
-        ];
+        ] as (string | number)[];
       }),
+      ...participants
+        .filter(p => !respondedIds.has(p.id))
+        .map(p => [
+          p.id,
+          p.participantNumber,
+          p.group === "intervention" ? "Intervenção" : "Controle",
+          "-", "-", "-", "-", "Sem respostas registradas", "-",
+        ] as (string | number)[]),
     ];
 
     downloadCsv(`respostas_diarias_${new Date().toLocaleDateString("en-CA")}.csv`, csv);
@@ -87,10 +101,13 @@ export default function AdminReports() {
       groupParticipants.some(p => p.id === r.participantId)
     ) || [];
 
-    if (groupResponses.length === 0) {
-      toast.error(`Não há respostas do grupo ${group === "intervention" ? "intervenção" : "controle"}`);
+    if (groupParticipants.length === 0) {
+      toast.error(`Não há participantes no grupo ${group === "intervention" ? "intervenção" : "controle"}`);
       return;
     }
+
+    // Participantes do grupo sem resposta também entram — export nunca bloqueia
+    const respondedIds = new Set(groupResponses.map(r => r.participantId));
 
     const csv = [
       ["ID Participante", "Número Participante", "Dia", "Bem-Estar ANTES (1-5)", "Bem-Estar DEPOIS (1-5)", "Duração Pausa (min)", "Atividade Atual", "Data/Hora"],
@@ -105,8 +122,15 @@ export default function AdminReports() {
           r.pauseDuration ? Math.floor(r.pauseDuration / 60) : "N/A",
           r.currentActivity || "",
           new Date(r.responseDate).toLocaleString("pt-BR"),
-        ];
+        ] as (string | number)[];
       }),
+      ...groupParticipants
+        .filter(p => !respondedIds.has(p.id))
+        .map(p => [
+          p.id,
+          p.participantNumber,
+          "-", "-", "-", "-", "Sem respostas registradas", "-",
+        ] as (string | number)[]),
     ];
 
     const groupName = group === "intervention" ? "intervencao" : "controle";
@@ -184,6 +208,84 @@ export default function AdminReports() {
     toast.success("Relatório completo exportado com sucesso!");
   };
 
+  // ─── Export Geral por Dia (formato longo: 1 linha por participante × dia) ──
+
+  const handleExportGeneral = (group?: "intervention" | "control") => {
+    const scope = group
+      ? (participants ?? []).filter(p => p.group === group)
+      : (participants ?? []);
+
+    if (scope.length === 0) {
+      toast.error("Não há participantes para exportar");
+      return;
+    }
+
+    const progressById = new Map((progressOverview ?? []).map(p => [p.participantId, p]));
+
+    // Respostas indexadas por participante e dia
+    const responsesByParticipant = new Map<number, Map<number, NonNullable<typeof responses>[0]>>();
+    for (const r of responses ?? []) {
+      let byDay = responsesByParticipant.get(r.participantId);
+      if (!byDay) {
+        byDay = new Map();
+        responsesByParticipant.set(r.participantId, byDay);
+      }
+      byDay.set(r.dayNumber, r);
+    }
+
+    // Maior percentual de áudio por participante+dia
+    const audioPctByDay = new Map<string, number>();
+    for (const a of audioProgress ?? []) {
+      const key = `${a.participantId}_${a.dayNumber}`;
+      const current = audioPctByDay.get(key);
+      if (current === undefined || a.percentageListened > current) {
+        audioPctByDay.set(key, a.percentageListened);
+      }
+    }
+
+    const rows: (string | number)[][] = [
+      ["Número Participante", "Grupo", "Dia", "Respondeu", "Número do Áudio", "% Áudio Escutado", "Sentimento ANTES (1-5)", "Sentimento DEPOIS (1-5)", "Resposta do Dia (Atividade)", "Data da Resposta", "Dias Respondidos", "Quais Dias Respondidos"],
+    ];
+
+    for (const p of scope) {
+      const groupLabel = p.group === "intervention" ? "Intervenção" : "Controle";
+      const progress = progressById.get(p.id);
+      const byDay = responsesByParticipant.get(p.id);
+      const respondedDays = byDay ? Array.from(byDay.keys()).sort((a, b) => a - b) : [];
+
+      if (!progress || progress.currentDay == null) {
+        // Nunca acessou o app: uma linha única
+        rows.push([p.participantNumber, groupLabel, "-", "Não iniciou", "-", "-", "-", "-", "-", "-", 0, "-"]);
+        continue;
+      }
+
+      const lastDay = Math.min(progress.currentDay, 28);
+      const isIntervention = p.group === "intervention";
+
+      for (let day = 1; day <= lastDay; day++) {
+        const response = byDay?.get(day);
+        rows.push([
+          p.participantNumber,
+          groupLabel,
+          day,
+          response ? "Sim" : "Não",
+          isIntervention ? Math.ceil(day / 7) : "-",
+          isIntervention ? (audioPctByDay.get(`${p.id}_${day}`) ?? "-") : "-",
+          response?.wellbeingBefore ?? "-",
+          response?.wellbeingAfter ?? "-",
+          response?.currentActivity || "-",
+          response ? new Date(response.responseDate).toLocaleDateString("pt-BR") : "-",
+          respondedDays.length,
+          respondedDays.join(", ") || "-",
+        ]);
+      }
+    }
+
+    const suffix = group === "intervention" ? "geral_intervencao" : group === "control" ? "geral_controle" : "geral";
+    downloadCsv(`pesquisa_pausa_${suffix}_${new Date().toLocaleDateString("en-CA")}.csv`, rows);
+    toast.success("Export geral (CSV) gerado com sucesso!");
+  };
+
   // ─── SPSS export (calls backend endpoint) ─────────────────────────────────
 
   const downloadSpss = async (group?: "intervention" | "control") => {
@@ -203,11 +305,34 @@ export default function AdminReports() {
     URL.revokeObjectURL(objectUrl);
   };
 
-  const handleExportSPSS = async () => {
-    if (stats.totalResponses === 0) {
-      toast.error("Não há dados para exportar em formato SPSS");
-      return;
+  // Export Geral por Dia em SPSS (endpoint dedicado no backend)
+  const handleExportSpssGeneral = async (group?: "intervention" | "control") => {
+    setSpssGeneralLoading(group ?? "all");
+    try {
+      const url = group ? `/api/export/spss-general?group=${group}` : "/api/export/spss-general";
+      const response = await fetch(url, { method: "GET", credentials: "include" });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ error: "Erro desconhecido" }));
+        throw new Error(err.error || `HTTP ${response.status}`);
+      }
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const suffix = group === "intervention" ? "geral_intervencao" : group === "control" ? "geral_controle" : "geral";
+      link.href = objectUrl;
+      link.download = `pesquisa_pausa_${suffix}_${new Date().toLocaleDateString("en-CA")}.sav`;
+      link.click();
+      URL.revokeObjectURL(objectUrl);
+      toast.success("Export geral (SPSS) gerado com sucesso!");
+    } catch (error) {
+      console.error("[SPSS General Export]", error);
+      toast.error(`Erro ao exportar SPSS: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setSpssGeneralLoading(null);
     }
+  };
+
+  const handleExportSPSS = async () => {
     setSpssLoading(true);
     try {
       await downloadSpss();
@@ -309,6 +434,83 @@ export default function AdminReports() {
           </Card>
         </div>
 
+        {/* ── Export Geral por Dia ── */}
+        <Card className="border-2 border-emerald-400 bg-emerald-50">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Package className="h-5 w-5 text-emerald-700" />
+              <CardTitle className="text-emerald-900">Export Geral por Dia (CSV e SPSS)</CardTitle>
+            </div>
+            <CardDescription className="text-emerald-700">
+              Uma linha por participante × dia decorrido: grupo, áudio do dia, % escutado,
+              sentimentos antes/depois, resposta, dias respondidos e quais dias. Inclui dias
+              sem resposta e participantes que nunca acessaram — nunca bloqueia por falta de dados.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <Button
+                onClick={() => handleExportGeneral()}
+                className="w-full bg-emerald-700 hover:bg-emerald-800 text-white"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Geral (CSV)
+              </Button>
+              <Button
+                onClick={() => handleExportGeneral("intervention")}
+                variant="outline"
+                className="w-full border-emerald-400 text-emerald-800 hover:bg-emerald-100"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Intervenção (CSV)
+              </Button>
+              <Button
+                onClick={() => handleExportGeneral("control")}
+                variant="outline"
+                className="w-full border-emerald-400 text-emerald-800 hover:bg-emerald-100"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Controle (CSV)
+              </Button>
+              <Button
+                onClick={() => handleExportSpssGeneral()}
+                disabled={spssGeneralLoading !== null}
+                className="w-full bg-emerald-700 hover:bg-emerald-800 text-white"
+              >
+                {spssGeneralLoading === "all" ? (
+                  <><span className="animate-spin mr-2">⏳</span>Gerando…</>
+                ) : (
+                  <><Download className="h-4 w-4 mr-2" />Geral (SPSS .sav)</>
+                )}
+              </Button>
+              <Button
+                onClick={() => handleExportSpssGeneral("intervention")}
+                disabled={spssGeneralLoading !== null}
+                variant="outline"
+                className="w-full border-emerald-400 text-emerald-800 hover:bg-emerald-100"
+              >
+                {spssGeneralLoading === "intervention" ? (
+                  <><span className="animate-spin mr-2">⏳</span>Gerando…</>
+                ) : (
+                  <><Download className="h-4 w-4 mr-2" />Intervenção (SPSS .sav)</>
+                )}
+              </Button>
+              <Button
+                onClick={() => handleExportSpssGeneral("control")}
+                disabled={spssGeneralLoading !== null}
+                variant="outline"
+                className="w-full border-emerald-400 text-emerald-800 hover:bg-emerald-100"
+              >
+                {spssGeneralLoading === "control" ? (
+                  <><span className="animate-spin mr-2">⏳</span>Gerando…</>
+                ) : (
+                  <><Download className="h-4 w-4 mr-2" />Controle (SPSS .sav)</>
+                )}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* ── SPSS Export (destaque) ── */}
         <Card className="border-2 border-violet-400 bg-violet-50">
           <CardHeader>
@@ -339,7 +541,7 @@ export default function AdminReports() {
             </div>
             <Button
               onClick={handleExportSPSS}
-              disabled={spssLoading || stats.totalResponses === 0}
+              disabled={spssLoading}
               className="w-full bg-violet-700 hover:bg-violet-800 text-white"
               size="lg"
             >
