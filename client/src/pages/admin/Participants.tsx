@@ -13,8 +13,18 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { trpc } from "@/lib/trpc";
-import { Plus, Download, RefreshCw } from "lucide-react";
+import { Plus, Download, RefreshCw, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -48,19 +58,38 @@ export default function AdminParticipants() {
     createMutation.mutate({ count, group });
   };
 
-  const handleExport = () => {
-    if (!participants || participants.length === 0) {
-      toast.error("Não há participantes para exportar");
+  // Participante selecionado para exclusão (abre o dialog de confirmação)
+  const [participantToDelete, setParticipantToDelete] = useState<{ id: number; participantNumber: string } | null>(null);
+
+  const deleteMutation = trpc.participants.delete.useMutation({
+    onSuccess: (data) => {
+      toast.success(`Participante ${data.participantNumber} excluído com sucesso`);
+      setParticipantToDelete(null);
+      refetch();
+      refetchProgress();
+    },
+    onError: (error) => {
+      toast.error(`Erro ao excluir participante: ${error.message}`);
+      setParticipantToDelete(null);
+    },
+  });
+
+  const handleExportGroup = (exportGroup: "intervention" | "control") => {
+    const groupLabel = exportGroup === "intervention" ? "Intervenção" : "Controle";
+    const filtered = (participants ?? []).filter((p) => p.group === exportGroup);
+
+    if (filtered.length === 0) {
+      toast.error(`Não há participantes do grupo ${groupLabel} para exportar`);
       return;
     }
 
     const csv = [
       ["Número", "Grupo", "Status", "Data de Cadastro", "Dia Atual", "Práticas Completadas", "Dias Perdidos", "Quais Dias Perdidos"],
-      ...participants.map((p) => {
+      ...filtered.map((p) => {
         const progress = progressById.get(p.id);
         return [
           p.participantNumber,
-          p.group === "intervention" ? "Intervenção" : "Controle",
+          groupLabel,
           p.active ? "Ativo" : "Inativo",
           new Date(p.createdAt).toLocaleDateString("pt-BR"),
           progress?.currentDay == null
@@ -77,12 +106,13 @@ export default function AdminParticipants() {
       .map((row) => row.join(","))
       .join("\n");
 
+    const suffix = exportGroup === "intervention" ? "intervencao" : "controle";
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = `participantes_${new Date().toLocaleDateString("en-CA")}.csv`;
+    link.download = `participantes_${suffix}_${new Date().toLocaleDateString("en-CA")}.csv`;
     link.click();
-    toast.success("Lista exportada com sucesso!");
+    toast.success(`Lista do grupo ${groupLabel} exportada com sucesso!`);
   };
 
   return (
@@ -100,9 +130,13 @@ export default function AdminParticipants() {
               <RefreshCw className="h-4 w-4 mr-2" />
               Atualizar
             </Button>
-            <Button variant="outline" onClick={handleExport}>
+            <Button variant="outline" onClick={() => handleExportGroup("intervention")}>
               <Download className="h-4 w-4 mr-2" />
-              Exportar
+              Exportar Intervenção
+            </Button>
+            <Button variant="outline" onClick={() => handleExportGroup("control")}>
+              <Download className="h-4 w-4 mr-2" />
+              Exportar Controle
             </Button>
           </div>
         </div>
@@ -191,6 +225,7 @@ export default function AdminParticipants() {
                       <TableHead>Dia Atual</TableHead>
                       <TableHead>Práticas</TableHead>
                       <TableHead>Dias Perdidos</TableHead>
+                      <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -258,6 +293,22 @@ export default function AdminParticipants() {
                             </Badge>
                           )}
                         </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            title={`Excluir participante ${participant.participantNumber}`}
+                            onClick={() =>
+                              setParticipantToDelete({
+                                id: participant.id,
+                                participantNumber: participant.participantNumber,
+                              })
+                            }
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
                       </TableRow>
                       );
                     })}
@@ -268,6 +319,44 @@ export default function AdminParticipants() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Dialog de confirmação de exclusão */}
+      <AlertDialog
+        open={participantToDelete !== null}
+        onOpenChange={(open) => {
+          if (!open) setParticipantToDelete(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-red-700">
+              Excluir participante {participantToDelete?.participantNumber}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação é <strong>irreversível</strong>. Serão excluídos o participante e{" "}
+              <strong>todos os seus dados</strong>: respostas diárias, progresso de áudio e
+              registros de cronômetro. Esses dados não aparecerão mais em relatórios nem
+              nas exportações CSV/SPSS.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setParticipantToDelete(null)}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700 text-white"
+              disabled={deleteMutation.isPending}
+              onClick={() => {
+                if (participantToDelete) {
+                  deleteMutation.mutate({ participantId: participantToDelete.id });
+                }
+              }}
+            >
+              {deleteMutation.isPending ? "Excluindo..." : "Excluir definitivamente"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 }

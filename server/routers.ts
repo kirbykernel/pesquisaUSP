@@ -109,6 +109,22 @@ export const appRouter = router({
         };
       }),
 
+    // Excluir participante e todos os seus dados (irreversível)
+    delete: protectedProcedure
+      .input(z.object({ participantId: z.number() }))
+      .mutation(async ({ input }) => {
+        const participant = await db.getParticipantById(input.participantId);
+        if (!participant) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Participante não encontrado",
+          });
+        }
+
+        await db.deleteParticipantCascade(input.participantId);
+        return { success: true, participantNumber: participant.participantNumber };
+      }),
+
     // Adesão por participante: dia atual, práticas completadas e dias perdidos.
     // Dia perdido = dia de calendário já encerrado (anterior a hoje, até o dia 28)
     // sem resposta registrada. O dia de hoje ainda está em andamento e não conta.

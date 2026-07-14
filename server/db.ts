@@ -151,6 +151,18 @@ export async function setParticipantFirstLogin(id: number, date: Date) {
     .where(eq(participants.id, id));
 }
 
+// Exclui o participante e todos os seus dados (respostas, progresso de áudio e cronômetro).
+// Usado pelo painel admin — o cliente não mexe diretamente no banco.
+export async function deleteParticipantCascade(participantId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.delete(dailyResponses).where(eq(dailyResponses.participantId, participantId));
+  await db.delete(audioProgress).where(eq(audioProgress.participantId, participantId));
+  await db.delete(timerProgress).where(eq(timerProgress.participantId, participantId));
+  await db.delete(participants).where(eq(participants.id, participantId));
+}
+
 export async function getAllParticipants() {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
