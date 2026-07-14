@@ -24,6 +24,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { trpc } from "@/lib/trpc";
+import { downloadCsv } from "@/lib/csv";
 import { Plus, Download, RefreshCw, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -83,7 +84,8 @@ export default function AdminParticipants() {
       return;
     }
 
-    const csv = [
+    const suffix = exportGroup === "intervention" ? "intervencao" : "controle";
+    downloadCsv(`participantes_${suffix}_${new Date().toLocaleDateString("en-CA")}.csv`, [
       ["Número", "Grupo", "Status", "Data de Cadastro", "Dia Atual", "Práticas Completadas", "Dias Perdidos", "Quais Dias Perdidos"],
       ...filtered.map((p) => {
         const progress = progressById.get(p.id);
@@ -97,21 +99,12 @@ export default function AdminParticipants() {
             : progress.currentDay > 28
               ? "Concluído"
               : String(progress.currentDay),
-          String(progress?.completedCount ?? 0),
-          String(progress?.missedDays.length ?? 0),
-          (progress?.missedDays ?? []).join(" "),
+          progress?.completedCount ?? 0,
+          progress?.missedDays.length ?? 0,
+          (progress?.missedDays ?? []).join(", "),
         ];
       }),
-    ]
-      .map((row) => row.join(","))
-      .join("\n");
-
-    const suffix = exportGroup === "intervention" ? "intervencao" : "controle";
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = `participantes_${suffix}_${new Date().toLocaleDateString("en-CA")}.csv`;
-    link.click();
+    ]);
     toast.success(`Lista do grupo ${groupLabel} exportada com sucesso!`);
   };
 

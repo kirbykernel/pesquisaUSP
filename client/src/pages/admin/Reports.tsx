@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
+import { downloadCsv } from "@/lib/csv";
 import { Download, FileSpreadsheet, Users, Activity, Headphones, Package, BarChart2 } from "lucide-react";
 import { toast } from "sonner";
 import { useState } from "react";
@@ -47,15 +48,9 @@ export default function AdminReports() {
           new Date(r.responseDate).toLocaleString("pt-BR"),
         ];
       }),
-    ]
-      .map((row) => row.map(cell => `"${cell}"`).join(","))
-      .join("\n");
+    ];
 
-    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = `respostas_diarias_${new Date().toLocaleDateString("en-CA")}.csv`;
-    link.click();
+    downloadCsv(`respostas_diarias_${new Date().toLocaleDateString("en-CA")}.csv`, csv);
     toast.success("Respostas exportadas com sucesso!");
   };
 
@@ -80,15 +75,9 @@ export default function AdminReports() {
           new Date(a.accessDate).toLocaleString("pt-BR"),
         ];
       }),
-    ]
-      .map((row) => row.map(cell => `"${cell}"`).join(","))
-      .join("\n");
+    ];
 
-    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = `progresso_audios_${new Date().toLocaleDateString("en-CA")}.csv`;
-    link.click();
+    downloadCsv(`progresso_audios_${new Date().toLocaleDateString("en-CA")}.csv`, csv);
     toast.success("Progresso de áudios exportado com sucesso!");
   };
 
@@ -118,16 +107,10 @@ export default function AdminReports() {
           new Date(r.responseDate).toLocaleString("pt-BR"),
         ];
       }),
-    ]
-      .map((row) => row.map(cell => `"${cell}"`).join(","))
-      .join("\n");
+    ];
 
-    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
     const groupName = group === "intervention" ? "intervencao" : "controle";
-    link.download = `respostas_${groupName}_${new Date().toLocaleDateString("en-CA")}.csv`;
-    link.click();
+    downloadCsv(`respostas_${groupName}_${new Date().toLocaleDateString("en-CA")}.csv`, csv);
     toast.success(`Respostas do grupo ${group === "intervention" ? "intervenção" : "controle"} exportadas!`);
   };
 
@@ -137,26 +120,26 @@ export default function AdminReports() {
       return;
     }
 
-    const sections: string[] = [];
+    const rows: (string | number)[][] = [];
 
-    sections.push("=== PARTICIPANTES ===");
-    sections.push(["Número", "Grupo", "Status", "Data Criação"].map(h => `"${h}"`).join(","));
+    rows.push(["=== PARTICIPANTES ==="]);
+    rows.push(["Número", "Grupo", "Status", "Data Criação"]);
     participants.forEach(p => {
-      sections.push([
+      rows.push([
         p.participantNumber,
         p.group === "intervention" ? "Intervenção" : "Controle",
         p.active ? "Ativo" : "Inativo",
         new Date(p.createdAt).toLocaleDateString("pt-BR"),
-      ].map(c => `"${c}"`).join(","));
+      ]);
     });
-    sections.push("");
+    rows.push([]);
 
     if (responses && responses.length > 0) {
-      sections.push("=== RESPOSTAS DIÁRIAS ===");
-      sections.push(["ID Participante", "Número", "Grupo", "Dia", "Bem-Estar ANTES", "Bem-Estar DEPOIS", "Pausa (min)", "Atividade", "Data"].map(h => `"${h}"`).join(","));
+      rows.push(["=== RESPOSTAS DIÁRIAS ==="]);
+      rows.push(["ID Participante", "Número", "Grupo", "Dia", "Bem-Estar ANTES", "Bem-Estar DEPOIS", "Pausa (min)", "Atividade", "Data"]);
       responses.forEach(r => {
         const participant = participants.find(p => p.id === r.participantId);
-        sections.push([
+        rows.push([
           r.participantId,
           participant?.participantNumber || "N/A",
           participant?.group === "intervention" ? "Intervenção" : "Controle",
@@ -166,17 +149,17 @@ export default function AdminReports() {
           r.pauseDuration ? Math.floor(r.pauseDuration / 60) : "N/A",
           r.currentActivity || "",
           new Date(r.responseDate).toLocaleString("pt-BR"),
-        ].map(c => `"${c}"`).join(","));
+        ]);
       });
-      sections.push("");
+      rows.push([]);
     }
 
     if (audioProgress && audioProgress.length > 0) {
-      sections.push("=== PROGRESSO DE ÁUDIOS ===");
-      sections.push(["ID Participante", "Número", "Áudio", "Dia", "% Escutado", "Completado", "Data"].map(h => `"${h}"`).join(","));
+      rows.push(["=== PROGRESSO DE ÁUDIOS ==="]);
+      rows.push(["ID Participante", "Número", "Áudio", "Dia", "% Escutado", "Completado", "Data"]);
       audioProgress.forEach(a => {
         const participant = participants.find(p => p.id === a.participantId);
-        sections.push([
+        rows.push([
           a.participantId,
           participant?.participantNumber || "N/A",
           a.audioNumber,
@@ -184,25 +167,20 @@ export default function AdminReports() {
           a.percentageListened,
           a.completed ? "Sim" : "Não",
           new Date(a.accessDate).toLocaleString("pt-BR"),
-        ].map(c => `"${c}"`).join(","));
+        ]);
       });
-      sections.push("");
+      rows.push([]);
     }
 
-    sections.push("=== ESTATÍSTICAS GERAIS ===");
-    sections.push(`"Total de Participantes","${stats.totalParticipants}"`);
-    sections.push(`"Grupo Intervenção","${stats.interventionCount}"`);
-    sections.push(`"Grupo Controle","${stats.controlCount}"`);
-    sections.push(`"Total de Respostas","${stats.totalResponses}"`);
-    sections.push(`"Total de Registros de Áudio","${stats.totalAudioProgress}"`);
-    sections.push(`"Data de Exportação","${new Date().toLocaleString("pt-BR")}"`);
+    rows.push(["=== ESTATÍSTICAS GERAIS ==="]);
+    rows.push(["Total de Participantes", stats.totalParticipants]);
+    rows.push(["Grupo Intervenção", stats.interventionCount]);
+    rows.push(["Grupo Controle", stats.controlCount]);
+    rows.push(["Total de Respostas", stats.totalResponses]);
+    rows.push(["Total de Registros de Áudio", stats.totalAudioProgress]);
+    rows.push(["Data de Exportação", new Date().toLocaleString("pt-BR")]);
 
-    const content = sections.join("\n");
-    const blob = new Blob(["\uFEFF" + content], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = `relatorio_completo_${new Date().toLocaleDateString("en-CA")}.csv`;
-    link.click();
+    downloadCsv(`relatorio_completo_${new Date().toLocaleDateString("en-CA")}.csv`, rows);
     toast.success("Relatório completo exportado com sucesso!");
   };
 
